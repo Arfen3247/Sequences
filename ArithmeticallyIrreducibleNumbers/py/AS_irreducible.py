@@ -3,17 +3,20 @@ A back-tracking algorithm to count the AS-irreducible strings in base b.
 Uses O(b L_max) space. We know L_max < 2*b.
 """
 
+import time
 
 BIT_POS = [tuple(i for i in range(8) if (byte >> i) & 1) for byte in range(256)]
+
+
 def count_AS_irreducible(base):
     digits = tuple(range(1, base))
-    counts = [0] * (2 * base)
-    counts[1] = base-1  # all the single digits
+    counts = [0] * (2 * base) # max length
+    counts[1] = base - 1  # all the single digits
     arr = []
     length = 1
 
-    bounds = [base * (length+1)//2 for length in range(2*base)]
-    blank_mask = (1<<base)-2
+    bounds = [base * (length_ + 1) // 2 for length_ in range(2 * base)]
+    blank_mask = (1 << base) - 2 # has b bits 
 
     # stack will have at most b*L_max states
     stack = [(x, False) for x in digits]
@@ -34,12 +37,12 @@ def count_AS_irreducible(base):
         # find the digits x such that no suffix of arr+[x] has the AS property,
         # ie. exists signed summation sigma such that sigma(suffix)=0.
         # O(bL) space, O(bL^2) time using bit manipulations (need 2*b*L bits, maybe b*L).
-        cm = blank_mask
+        cm = blank_mask # copy of cm 
         bound = bounds[length]
-        sums = 1 << bound
+        sums = 1 << bound # b*L bits to work # 527 bits # need 2*b*L bits 2 * base * (max_)lenght of digit string we work on , max_lenght < 2*b  
         for y in reversed(arr):
             sums = (sums << y) | (sums >> y)
-            cm &= ~(sums>>bound)
+            cm &= ~(sums >> bound)
             if not cm:
                 break
         if not cm:
@@ -47,27 +50,36 @@ def count_AS_irreducible(base):
 
         # read off the allowed candidates x in O(b) time, add to stack
         # this part is probably dumb
-        offset = 0
-        for byte_val in cm.to_bytes((cm.bit_length() + 7) // 8, 'little'):
-            for bit in BIT_POS[byte_val]:
-                stack.append((offset+bit, False))
-            offset += 8
-        counts[length] += cm.bit_count()
+        for x in digits:
+            if 1<<x & cm: # if bit that represents x in cm then append to stack
+                stack.append((x, False))
+                counts[length] += 1
+
+#        offset = 0
+#        for byte_val in cm.to_bytes((cm.bit_length() + 7) // 8, "little"):
+#            for bit in BIT_POS[byte_val]:
+#                stack.append((offset + bit, False))
+#            offset += 8
+#
+#        counts[length] += cm.bit_count()
 
     # remove the unused lengths
     length = len(counts) - 1
     while not counts[length]:
         length -= 1
+        counts.pop()
     return counts
 
-import time
-if __name__ == '__main__':
-    print(f"base        total  length     time(s)")
+
+if __name__ == "__main__":
+    print("base        total  length     time(s)")
     print("-------------------------------------")
     for base in range(2, 17):
         st = time.time()
         counts = count_AS_irreducible(base)
-        print(f"{base:>4} {sum(counts):>12}   {len(counts)-1:>5}  {time.time()-st:>10.3f}")
+        print(
+            f"{base:>4} {sum(counts):>12}   {len(counts) - 1:>5}  {time.time() - st:>10.3f} {counts}"
+        )
 
 """
 base        total  length     time(s)
