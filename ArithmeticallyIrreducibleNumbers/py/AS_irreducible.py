@@ -1,23 +1,20 @@
 """
-A back-tracking algorithm to count the AS-irreducible strings in base b.
-Uses O(b L_max) space. We know L_max < 2*b.
+Back-tracking algorithms to count the AS-irreducible strings in base b.
+We know L_max < 2*b.
 """
 
-import time
-
-BIT_POS = [tuple(i for i in range(8) if (byte >> i) & 1) for byte in range(256)]
-
-
-def count_AS_irreducible(base):
+def count_AS_irreducible_1(base):
+    """
+    O(b L_max^2) time per node, O(b L_max) space.
+    Calculates candidates from scratch each node.
+    """
     digits = tuple(range(1, base))
-    counts = [0] * (2 * base) # max length
-    counts[1] = base - 1  # all the single digits
+    counts = [0] * (2 * base)
+    counts[0] = base-1  # all the single digits
     arr = []
-    length = 1
-
-    bounds = [base * (length_ + 1) // 2 for length_ in range(2 * base)]
-    blank_mask = (1 << base) - 2 # has b bits 
-
+    tm1 = -1    # total minus 1
+    blank_mask = (1<<base)-2    # all non-zero digits
+    
     # stack will have at most b*L_max states
     stack = [(x, False) for x in digits]
     while stack:
@@ -25,78 +22,95 @@ def count_AS_irreducible(base):
 
         # backtrack changes
         if second_pass:
-            length -= 1
             arr.pop()
+            tm1 -= digit
             continue
         stack.append((digit, True))
 
         # enact changes
-        length += 1
         arr.append(digit)
+        tm1 += digit
 
         # find the digits x such that no suffix of arr+[x] has the AS property,
         # ie. exists signed summation sigma such that sigma(suffix)=0.
-        # O(bL) space, O(bL^2) time using bit manipulations (need 2*b*L bits, maybe b*L).
-        cm = blank_mask # copy of cm 
-        bound = bounds[length]
-        sums = 1 << bound # b*L bits to work # 527 bits # need 2*b*L bits 2 * base * (max_)lenght of digit string we work on , max_lenght < 2*b  
+        # O(bL) space, O(bL^2) time using bit manipulations
+        rz = tm1 // 2   # right zeros
+        sums = 1 << rz
+        cm = blank_mask << rz   
         for y in reversed(arr):
             sums = (sums << y) | (sums >> y)
-            cm &= ~(sums >> bound)
+            cm &= ~sums
             if not cm:
                 break
-        if not cm:
-            continue
-
-        # read off the allowed candidates x in O(b) time, add to stack
-        # this part is probably dumb
-        for x in digits:
-            if 1<<x & cm: # if bit that represents x in cm then append to stack
+        else:
+            # extract the valid digits
+            cm >>= rz
+            counts[len(arr)] += cm.bit_count()
+            while cm:
+                lsb = cm & -cm
+                x = lsb.bit_length() - 1
                 stack.append((x, False))
-                counts[length] += 1
-
-#        offset = 0
-#        for byte_val in cm.to_bytes((cm.bit_length() + 7) // 8, "little"):
-#            for bit in BIT_POS[byte_val]:
-#                stack.append((offset + bit, False))
-#            offset += 8
-#
-#        counts[length] += cm.bit_count()
+                cm ^= lsb      
 
     # remove the unused lengths
-    length = len(counts) - 1
-    while not counts[length]:
-        length -= 1
+    while not counts[-1]:
         counts.pop()
     return counts
 
 
-if __name__ == "__main__":
-    print("base        total  length     time(s)")
+
+def count_AS_irreducible_2(base):
+    """
+    O(b L_max) time per node, O(b L_max^2) space.
+    Stores a list of bitmasks to track the disallowed candidates.
+    """
+    digits = tuple(range(1, base))
+    counts = [0] * (2 * base)
+    counts[0] = base-1  # all the single digits
+    arr = []
+    rz = (base-1) * base # right zeros, <=(b-1) L_max // 2 < (b-1)b
+    zero = 1 << rz
+    sums_list = [zero]
+    blank_mask = (1<<base)-2    # all non-zero digits
+    
+    # stack will have at most b*L_max states
+    stack = [(x, False) for x in digits]
+    while stack:
+        digit, second_pass = stack.pop()
+
+        # backtrack changes
+        if second_pass:
+            arr.pop()
+            sums_list.pop()
+            continue
+        stack.append((digit, True))
+
+        # enact changes
+        arr.append(digit)
+        s = sums_list[-1]
+        s = (s << digit) | zero | (s >> digit)
+        sums_list.append(s)
+
+        # extract the valid digits
+        cm = blank_mask & ~ (s >> rz)
+        counts[len(arr)] += cm.bit_count()
+        while cm:
+            lsb = cm & -cm
+            x = lsb.bit_length() - 1
+            stack.append((x, False))
+            cm ^= lsb      
+
+    # remove the unused lengths
+    while not counts[-1]:
+        counts.pop()
+    return counts
+
+
+if __name__ == '__main__':
+    import time
+    print(f"base        total  length     time(s)")
     print("-------------------------------------")
     for base in range(2, 17):
         st = time.time()
-        counts = count_AS_irreducible(base)
-        print(
-            f"{base:>4} {sum(counts):>12}   {len(counts) - 1:>5}  {time.time() - st:>10.3f} {counts}"
-        )
-
-"""
-base        total  length     time(s)
--------------------------------------
-   2            1       1       0.000
-   3            5       3       0.000
-   4           14       3       0.000
-   5           84       7       0.001
-   6          210       7       0.001
-   7          993       7       0.003
-   8         2310       7       0.006
-   9        32318      15       0.279
-  10        48469      15       0.304
-  11       269405      15       1.887
-  12       396146      15       2.052
-  13      6368008      15      38.143
-  14      7972901      15      42.715
-  15     41304188      15     230.374
-  16     51298219      15     274.692
-"""
+        counts = count_AS_irreducible_2(base)
+        print(f"{base:>4} {sum(counts):>12}   {len(counts):>5}  {time.time()-st:>10.3f}")
