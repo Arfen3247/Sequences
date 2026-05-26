@@ -1,5 +1,5 @@
-CXX=g++ -std=c++23
-FLAGS=-O3 -Wall -Werror -Wextra
+CXX=clang++ -std=c++23
+FLAGS=-O3 -ffast-math -Wall -Werror -Wextra
 
 main : AS_irreducible.cpp 
 	$(CXX) $(FLAGS) AS_irreducible.cpp -o AS_irreducible   

@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-std::vector<std::size_t> count_AS_irreducible(const std::size_t base) {
+std::vector<std::size_t> count_AS_irreducible_1(const std::size_t base) {
 
   const std::vector<std::size_t> digits = [base]() {
     std::vector<std::size_t> digits(base - 1);
@@ -17,8 +17,8 @@ std::vector<std::size_t> count_AS_irreducible(const std::size_t base) {
   }();
   const std::vector<std::size_t> bounds = [base]() {
     std::vector<std::size_t> bounds(2 * base);
-    for (std::size_t length_ = 0; length_ < bounds.size(); length_++) {
-      bounds.at(length_) = base * (length_ + 1) / 2;
+    for (std::size_t length = 0; length < bounds.size(); length++) {
+      bounds.at(length) = base * (length + 1) / 2;
     }
     return bounds;
   }();
@@ -89,47 +89,121 @@ std::vector<std::size_t> count_AS_irreducible(const std::size_t base) {
   return counts;
 }
 
+std::vector<std::size_t> count_AS_irreducible_2(const std::size_t base) {
+
+  const std::vector<std::size_t> digits = [base]() {
+    std::vector<std::size_t> digits(base - 1);
+    std::iota(digits.begin(), digits.end(), 1);
+    return digits;
+  }();
+
+  std::vector<std::size_t> counts(2 * base, 0);
+  counts.at(0) = base - 1;
+
+  std::vector<std::size_t> arr;
+
+  const std::size_t rz = base - 1;
+  const std::size_t bitset_length = 2 * base * base;
+  boost::dynamic_bitset zero(bitset_length, (1 << rz)); // UPDATE ON >= 64
+  std::vector<boost::dynamic_bitset<>> sums_list = {zero};
+  const boost::dynamic_bitset blank_mask(bitset_length, (1 << base) - 2); // UPDATE ON >= 64
+
+  // stack will have at most b*L_max states
+  typedef std::pair<std::size_t, bool> stackpair;
+  std::vector<stackpair> stack = [digits]() {
+    std::vector<stackpair> stack(digits.size());
+    for (std::size_t i = 0; i < digits.size(); i++) {
+      stack.at(i).first = digits.at(i);
+      stack.at(i).second = false;
+    }
+    return stack;
+  }();
+
+  while (!stack.empty()) {
+    std::size_t digit = stack.back().first;
+    bool second_pass = stack.back().second;
+    stack.pop_back();
+
+    if (second_pass) { // backtrack changes
+      arr.pop_back();
+      sums_list.pop_back();
+      continue;
+    }
+
+    stack.emplace_back(digit, true);
+
+    arr.push_back(digit); // enact changes
+    boost::dynamic_bitset s = sums_list.back();
+    s = (s << digit) | zero | (s >> digit);
+    sums_list.push_back(s);
+
+    boost::dynamic_bitset cm(blank_mask & ~(s >> rz));
+    counts.at(arr.size()) += cm.count();
+    while (cm.any()) {
+      std::size_t x = cm.find_first(); // index of lowest set bit
+      stack.emplace_back(x, false);
+      cm.reset(x); // clear it, equivalent to cm ^= lsb
+    }
+  }
+
+  while (!counts.back()) {
+    counts.pop_back();
+  }
+
+  counts.insert(counts.begin(), 0);
+  return counts;
+}
+
 int main(int argc, char *argv[]) {
 
   std::size_t begin, end;
 
-  if (argc == 2) {
+  if (argc == 2 && (std::string(argv[1]) == "help" || std::string(argv[1]) == "h")) {
+    std::cout << "This binary is designed to be used in 3 different modes. All argumets to this binary call are bases "
+                 "to be computed by the counting function.\n"
+                 "   1. When ran with one base argument, that base is computed.\n"
+                 "   2. When ran with two base arguments an inclusive range of those two bases is computed.\n"
+                 "   3. When ran with no arguments a default range of 2 to 10 is computed.\n"
+                 "\n"
+                 "Examples on how to run this binary\n"
+                 "\n"
+                 "    ./AS_reducible 5\n"
+                 "    ./AS_reducible 3 10\n"
+                 "    ./AS_reducible\n"
+                 "\n";
+    std::exit(EXIT_SUCCESS);
+  } else if (argc == 2) {
     begin = std::stoi(argv[1]);
     end = std::stoi(argv[1]);
   } else if (argc == 3) {
     begin = std::stoi(argv[1]);
     end = std::stoi(argv[2]);
-  } else if (argc == 3) {
-    begin = std::stoi(argv[1]);
-    end = std::stoi(argv[2]);
   } else {
     begin = 2;
-    end = 11;
+    end = 10;
   }
 
-  // below formatting and timing is the work of an llm, is due some reviewing but on first glance it looks good
-  std::cout << std::format("{:>4} {:>12} {:>8} {:>11}\n", "base", "total",
-                           "length", "time(s)");
+  if (begin >= 32 || end >= 32 || begin <= 1) {
+    std::cout << " Womp womp try again\n";
+    std::exit(EXIT_FAILURE);
+  }
+
+  std::cout << std::format("{:>4} {:>12} {:>8} {:>11}\n", "base", "total", "length", "time(s)");
   std::cout << std::string(37, '-') << '\n';
-
   for (std::size_t base = begin; base <= end; base++) {
-    auto st = std::chrono::steady_clock::now();
+    std::chrono::time_point start = std::chrono::steady_clock::now();
 
-    const std::vector<std::size_t> counts = count_AS_irreducible(base);
-    double elapsed =
-        std::chrono::duration<double>(std::chrono::steady_clock::now() - st)
-            .count();
+    const std::vector<std::size_t> counts = count_AS_irreducible_2(base);
+    const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 
     const std::size_t total = std::reduce(counts.begin(), counts.end());
 
     std::string counts_str = "[";
     for (std::size_t i = 0; i < counts.size(); ++i)
-      counts_str +=
-          std::format("{}{}", counts[i], i + 1 < counts.size() ? ", " : "");
+      counts_str += std::format("{}{}", counts[i], i + 1 < counts.size() ? ", " : "");
     counts_str += "]";
 
-    std::cout << std::format("{:>4} {:>12} {:>8} {:>11.3f}  {}\n", base, total,
-                             counts.size() - 1, elapsed, counts_str);
+    std::cout << std::format("{:>4} {:>12} {:>8} {:>11.3f}  {}\n", base, total, counts.size() - 1, elapsed, counts_str);
   }
 
   return 0;
