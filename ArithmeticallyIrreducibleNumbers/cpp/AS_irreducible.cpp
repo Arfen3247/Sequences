@@ -89,68 +89,78 @@ std::vector<std::size_t> count_AS_irreducible_1(const std::size_t base) {
   return counts;
 }
 
+
+std::uint32_t find_upper_bound_L(const std::uint32_t base, bool conjecture_L) {
+  if (conjecture_L){ // conjectured upper bound 2^n-1, where n=ceil(log_2(base))
+    return (1u << (32 - __builtin_clz(base - 1))) - 1;
+  }
+  return 2 * base - 1; // safe upper bound
+}
+
+
 std::vector<std::size_t> count_AS_irreducible_2(const std::size_t base) {
-
-  const std::vector<std::size_t> digits = [base]() {
-    std::vector<std::size_t> digits(base - 1);
-    std::iota(digits.begin(), digits.end(), 1);
-    return digits;
+  // digits in this base
+  const std::vector<std::uint16_t> digits = [base] {
+    std::vector<std::uint16_t> v(base - 1);
+    std::iota(v.begin(), v.end(), 1u);
+    return v;
   }();
 
-  std::vector<std::size_t> counts(2 * base, 0);
-  counts.at(0) = base - 1;
+  // bound the maximum length
+  std::uint32_t L_upper = find_upper_bound_L(base, false);
 
-  std::vector<std::size_t> arr;
+  // bound how many bits are needed
+  const std::uint16_t T = (base - 1) * L_upper;
+  const std::uint16_t lz = (T + base - 1) / 2; 
+  const std::uint16_t rz = (T - 1) / 2;
+  const std::uint16_t num_bits = lz + 1 + rz;
+  boost::dynamic_bitset s0(num_bits, 0);
+  s0.set(rz);
 
-  const std::size_t rz = base - 1;
-  const std::size_t bitset_length = 2 * base * base;
-  boost::dynamic_bitset zero(bitset_length, (1 << rz)); // UPDATE ON >= 64
-  std::vector<boost::dynamic_bitset<>> sums_list = {zero};
-  const boost::dynamic_bitset blank_mask(bitset_length, (1 << base) - 2); // UPDATE ON >= 64
+  // the sums bitmasks, representing the digits not allowed to appear next
+  std::vector<boost::dynamic_bitset<>> sums_list;
+  sums_list.reserve(L_upper+1);
+  sums_list.push_back(s0);
 
-  // stack will have at most b*L_max states
-  typedef std::pair<std::size_t, bool> stackpair;
-  std::vector<stackpair> stack = [digits]() {
-    std::vector<stackpair> stack(digits.size());
-    for (std::size_t i = 0; i < digits.size(); i++) {
-      stack.at(i).first = digits.at(i);
-      stack.at(i).second = false;
-    }
-    return stack;
-  }();
+  // required result
+  std::vector<std::uint64_t> counts(L_upper+2, 0);
+  counts.at(1) = base - 1;
 
+  // the stack for the back-tracking algorithm
+  std::vector<std::uint16_t> stack = digits;
+  stack.reserve((base-1) * L_upper);
   while (!stack.empty()) {
-    std::size_t digit = stack.back().first;
-    bool second_pass = stack.back().second;
+    std::uint16_t digit = stack.back();
     stack.pop_back();
 
-    if (second_pass) { // backtrack changes
-      arr.pop_back();
+    // 0 is the signal to backtrack the last digit
+    if (!digit) { 
       sums_list.pop_back();
       continue;
     }
+    stack.emplace_back(0);
 
-    stack.emplace_back(digit, true);
-
-    arr.push_back(digit); // enact changes
+    // apply this digit
     boost::dynamic_bitset s = sums_list.back();
-    s = (s << digit) | zero | (s >> digit);
+    s = (s << digit) | (s >> digit);
+    s.set(rz);
     sums_list.push_back(s);
 
-    boost::dynamic_bitset cm(blank_mask & ~(s >> rz));
-    counts.at(arr.size()) += cm.count();
-    while (cm.any()) {
-      std::size_t x = cm.find_first(); // index of lowest set bit
-      stack.emplace_back(x, false);
-      cm.reset(x); // clear it, equivalent to cm ^= lsb
+    // extract candidates for next digit
+    std::uint64_t found = 0;
+    for (std::uint16_t i = 1; i < base; i++){
+      if (!s.test(rz+i)){
+        stack.emplace_back(i);
+        ++found;
+      }
     }
+    counts.at(sums_list.size()) += found;
   }
 
+  // remove trailing zeros
   while (!counts.back()) {
     counts.pop_back();
   }
-
-  counts.insert(counts.begin(), 0);
   return counts;
 }
 
