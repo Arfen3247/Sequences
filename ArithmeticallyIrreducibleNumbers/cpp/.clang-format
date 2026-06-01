@@ -1,3 +1,3 @@
----
 Language:        Cpp
-ColumnLimit:     120
+ColumnLimit:     80 
+IgnorePragmas:   true
