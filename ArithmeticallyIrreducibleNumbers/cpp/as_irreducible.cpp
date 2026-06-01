@@ -109,24 +109,21 @@ void branch(std::vector<std::uint16_t> &stack,
   std::uint64_t found = 0;
   for (std::uint16_t i = 1; i < base; i++) {
     if (!s.test(rz + i)) {
-      stack.push_back(i);
+      stack.push_back(i); // the push backs are particularly bloated with checks
+                          // for validity
       ++found;
     }
   }
-  counts.at(sums_list.size()) += found;
-  // counts[sums_list.size()] += found;
+  counts[sums_list.size()] += found;
 }
 
-void extend_stack(std::vector<std::uint16_t> &omp_out,
-                  const std::vector<std::uint16_t> &omp_in) {
-  omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end());
-}
 void reduce_count(std::vector<std::uint64_t> &omp_out,
                   const std::vector<std::uint64_t> &omp_in) {
   for (std::size_t i = 0; i < omp_out.size(); i++) {
     omp_out.at(i) += omp_in.at(i);
   }
 }
+
 std::vector<std::size_t> count_parallel(const std::size_t base) {
   // digits in this base
   const std::vector<std::uint16_t> digits = [base] {
@@ -153,16 +150,13 @@ std::vector<std::size_t> count_parallel(const std::size_t base) {
   std::vector<boost::dynamic_bitset<>> sums_list;
   sums_list.reserve(L_upper + 1);
   sums_list.push_back(s0);
-// required result
+  // required result
   std::vector<std::uint64_t> counts(L_upper + 2, 0);
   counts.at(1) = base - 1;
 
   // the stack for the back-tracking algorithm
   std::vector<std::uint16_t> stack = digits;
   stack.reserve((base - 1) * L_upper);
-
-  // #pragma omp parallel for  reduction(extend :
-  // counts) schedule(dynamic)
 
 #pragma omp parallel for firstprivate(sums_list) schedule(dynamic)
   for (std::size_t i = 0; i < stack.size(); i++) {
@@ -175,10 +169,6 @@ std::vector<std::size_t> count_parallel(const std::size_t base) {
 #pragma omp critical
     reduce_count(counts, local_counts);
   }
-
-  //  while (!stack.empty()) {
-  //    branch(stack, sums_list, rz, counts, base);
-  //  }
 
   // remove trailing zeros
   while (!counts.back()) {
@@ -236,7 +226,6 @@ int main(int argc, char *argv[]) {
   // for (auto it =  args.begin(); it != args.end(); it++ ) {
   for (std::size_t i = 0; i < args.size(); i++) {
     std::string arg = args.at(i);
-    std::cout << arg << std::endl;
 
     if (arg == "-b" || arg == "-begin") {
       begin = std::stoi(args.at(i + 1));
@@ -284,7 +273,7 @@ int main(int argc, char *argv[]) {
                            "length", "time(s)");
   std::cout << std::string(37, '-') << '\n';
   for (std::size_t base = begin.value(); base <= end; base++) {
-    std::chrono::time_point start = std::chrono::steady_clock::now();
+    const std::chrono::time_point start = std::chrono::steady_clock::now();
 
     const std::vector<std::size_t> counts = count(base, exec_mode.value());
     const double elapsed =
