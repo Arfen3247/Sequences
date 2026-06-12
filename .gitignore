@@ -1,5 +1,5 @@
 ./venv
-./ArithmeticallyIrreducibleNumbers/cpp/AS_irreducible
-./ArithmeticallyIrreducibleNumbers/cpp/AS_irreducible_g
-./ArithmeticallyIrreducibleNumbers/cpp/gdb.txt
+./ArithmeticallyIrreducibleNumbers/as/cpp/count 
+./ArithmeticallyIrreducibleNumbers/as/cpp/count_g
+./ArithmeticallyIrreducibleNumbers/as/cpp/gdb.txt
 
