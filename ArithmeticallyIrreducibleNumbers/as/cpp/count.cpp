@@ -324,7 +324,7 @@ std::vector<std::size_t> count_parallel(const size_t base, const bool conjecture
   auto L_upper = std::get<0>(basics);
   auto right_bits = std::get<1>(basics);
   auto total_bits = std::get<2>(basics);
-  std::cout << std::format("{:>3}/{}  {:>7}  {:>7}  {:>10}  {}\n", "num", branches.size(), "Time", "time", "found", "branch");
+  std::cout << std::format("{:>3}/{}  {:>11}  {:>11}  {:>20}  {}\n", "num", branches.size(), "Time", "time", "found", "branch");
 
   // count along multiple branches in parallel!
   std::atomic<std::size_t> completed{0};
@@ -340,12 +340,12 @@ std::vector<std::size_t> count_parallel(const size_t base, const bool conjecture
       auto new_counts = count_branch(base, L_upper, right_bits, total_bits, branch);
       reduce(local_counts, new_counts);
  
-      const std::size_t sum = std::accumulate(new_counts.begin(), new_counts.end(), 0);
+      const std::size_t sum = std::accumulate(new_counts.begin(), new_counts.end(), std::size_t{0});
       const double time_branch = std::chrono::duration<double>(std::chrono::steady_clock::now() - start_branch).count();
       const double time_tree = std::chrono::duration<double>(std::chrono::steady_clock::now() - start_tree).count();
       
       auto local_completed = ++completed;
-      std::string line = std::format("{:>3}/{}  {:>7.1f}  {:>7.1f}  {:10}  {}\n", local_completed, total_branches, time_tree, time_branch, sum, branch);
+      std::string line = std::format("{:>3}/{}  {:>11.1f}  {:>11.1f}  {:>20}  {}\n", local_completed, total_branches, time_tree, time_branch, sum, branch);
 
       #pragma omp critical (print) 
       {
@@ -427,8 +427,8 @@ int main(int argc, char *argv[]) {
     throw std::runtime_error("bases must be within the range [2, 32]\n");
   }
 
-  std::cout << std::format("{:>4} {:>12} {:>8} {:>11}\n", "base", "total", "length", "time(s)");
-  std::cout << std::string(38, '-') << '\n';
+  std::cout << std::format("{:>4} {:>20} {:>8} {:>11}\n", "base", "total", "length", "time(s)");
+  std::cout << std::string(46, '-') << '\n';
   for (std::size_t base = start; base <= end; base++) {
     std::chrono::time_point start = std::chrono::steady_clock::now();
 
@@ -446,7 +446,7 @@ int main(int argc, char *argv[]) {
       counts_str += std::format("{}{}", counts[i], i + 1 < counts.size() ? ", " : "");
     counts_str += "]";
 
-    std::cout << std::format("{:>4} {:>12} {:>8} {:>11.3f}  {}\n", base, total, counts.size() - 1, elapsed, counts_str);
+    std::cout << std::format("{:>4} {:>20} {:>8} {:>11.3f}  {}\n", base, total, counts.size() - 1, elapsed, counts_str);
   }
 
   return 0;
