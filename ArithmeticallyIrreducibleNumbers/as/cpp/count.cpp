@@ -7,6 +7,7 @@
 #include <ranges>
 #include <string>
 #include <vector>
+#include <atomic>
 #include <omp.h>
 
 std::size_t find_upper_bound_L(const std::size_t base, bool conjecture_L) {
@@ -325,13 +326,14 @@ std::vector<std::size_t> count_parallel(const size_t base, const bool conjecture
   auto total_bits = std::get<2>(basics);
   std::cout << std::format("{:>3}/{}  {:>7}  {:>7}  {:>10}  {}\n", "num", branches.size(), "Time", "time", "found", "branch");
 
-  // count along mutliple branches in parallel!
-  std::size_t completed = 0;
+  // count along multiple branches in parallel!
+  std::atomic<std::size_t> completed{0};
+  const auto total_branches = branches.size();
   # pragma omp parallel
   {
     std::vector<std::size_t> local_counts(L_upper + 2, 0);
 
-    #pragma omp for schedule(dynamic)
+    #pragma omp for
     for (auto branch : branches) { 
       std::chrono::time_point start_branch = std::chrono::steady_clock::now();
 
@@ -341,20 +343,21 @@ std::vector<std::size_t> count_parallel(const size_t base, const bool conjecture
       const std::size_t sum = std::accumulate(new_counts.begin(), new_counts.end(), 0);
       const double time_branch = std::chrono::duration<double>(std::chrono::steady_clock::now() - start_branch).count();
       const double time_tree = std::chrono::duration<double>(std::chrono::steady_clock::now() - start_tree).count();
+      
+      auto local_completed = ++completed;
+      std::string line = std::format("{:>3}/{}  {:>7.1f}  {:>7.1f}  {:10}  {}\n", local_completed, total_branches, time_tree, time_branch, sum, branch);
 
-      #pragma omp critical 
+      #pragma omp critical (print) 
       {
-        completed++;
-        std::cout << std::format("{:>3}/{}  {:>7.1f}  {:>7.1f}  {:10}  {}\n", completed, branches.size(), time_tree, time_branch, sum, branch);
+        std::cout << line;
       }
     }
-
-    #pragma omp critical
+    #pragma omp critical (account) 
     {
-      reduce(counts, local_counts);
+      reduce(counts, local_counts); 
     }
   }
-
+ 
   const double time_tree = std::chrono::duration<double>(std::chrono::steady_clock::now() - start_tree).count();
   std::cout << std::format("\nSearch complete! {:.3f}\n\n", time_tree);
   while (!counts.back()) {
@@ -362,11 +365,6 @@ std::vector<std::size_t> count_parallel(const size_t base, const bool conjecture
   }
   return counts;
 }
-
-
-
-
-
 
 void printHelp() {
  std::cout <<
